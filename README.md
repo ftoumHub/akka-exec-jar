@@ -1,4 +1,4 @@
-## Akka Exec Java Cluster Example with SBR
+## Akka Exec Java
 
 Construction d'un jar exécutable contenant des libraires du framework AKKA.
 
