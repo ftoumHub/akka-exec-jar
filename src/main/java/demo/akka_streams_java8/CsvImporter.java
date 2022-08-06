@@ -6,7 +6,12 @@ import akka.actor.ActorSystem;
 import akka.stream.ActorMaterializer;
 import akka.stream.FlowShape;
 import akka.stream.Graph;
-import akka.stream.javadsl.*;
+import akka.stream.javadsl.Flow;
+import akka.stream.javadsl.Framing;
+import akka.stream.javadsl.Keep;
+import akka.stream.javadsl.Sink;
+import akka.stream.javadsl.Source;
+import akka.stream.javadsl.StreamConverters;
 import akka.util.ByteString;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -27,7 +32,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import static akka.stream.javadsl.FramingTruncation.ALLOW;
+import static io.vavr.API.List;
 import static io.vavr.API.println;
+import static java.lang.System.currentTimeMillis;
+import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 
 public class CsvImporter {
 
@@ -93,22 +102,20 @@ public class CsvImporter {
         return Flow.of(ValidReading.class)
                 .mapAsyncUnordered(concurrentWrites, vr -> {
                     println(vr);
-                    return CompletableFuture.completedFuture(Tuple0.instance());
+                    return completedFuture(Tuple0.instance());
                 })
                 .toMat(Sink.ignore(), Keep.right());
     }
 
     private Flow<File, ValidReading, NotUsed> processSingleFile() {
-        return Flow.of(File.class)
-                .via(parseFile())
-                .via(computeAverage());
+        return Flow.of(File.class).via(parseFile()).via(computeAverage());
     }
 
     private CompletionStage<Done> importFromFiles() {
-        List<File> files = List.of(importDirectory.listFiles());
+        List<File> files = List(requireNonNull(importDirectory.listFiles()));
         logger.info("Starting import of {} files from {}", files.size(), importDirectory.getPath());
 
-        long startTime = System.currentTimeMillis();
+        long startTime = currentTimeMillis();
 
         Graph<FlowShape<File, ValidReading>, NotUsed> balancer = Balancer.create(concurrentFiles, processSingleFile());
 
@@ -117,7 +124,7 @@ public class CsvImporter {
                 .runWith(storeReadings(), ActorMaterializer.create(system))
                 .whenComplete((d, e) -> {
                     if (d != null) {
-                        logger.info("Import finished in {}s", (System.currentTimeMillis() - startTime) / 1000.0);
+                        logger.info("Import finished in {}s", (currentTimeMillis() - startTime) / 1000.0);
                     } else {
                         logger.error("Import failed", e);
                     }
